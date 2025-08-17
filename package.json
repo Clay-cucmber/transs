@@ -2,7 +2,7 @@
   "name": "web-translator-cn-ru",
   "version": "1.0.0",
   "private": true,
-  "homepage": "https://clay-cucmber.github.io/translate",
+  "homepage": "https://clay-cucmber.github.io/translate/",
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
