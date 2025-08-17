@@ -298,12 +298,19 @@
         </div>
     </div>
 
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
     <script>
         let messages = [];
         let selectedLanguage = 'ru';
         let isRecording = false;
         let isLoading = false;
         let recognition = null;
+        let userId = null;
+        let syncEnabled = false;
+        let database = null;
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
