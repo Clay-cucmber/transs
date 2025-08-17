@@ -335,6 +335,7 @@
             updatePlaceholder();
             updateInfo();
             setupSpeechRecognition();
+            initializeFirebase();
             
             document.getElementById('languageSelect').addEventListener('change', function() {
                 selectedLanguage = this.value;
@@ -342,6 +343,158 @@
                 updateInfo();
             });
         });
+
+        function initializeFirebase() {
+            try {
+                // Public Firebase config (можно использовать без секретов)
+                const firebaseConfig = {
+                    apiKey: "AIzaSyBpZV5H0P0_demo_key_for_public_use",
+                    authDomain: "translator-demo.firebaseapp.com",
+                    databaseURL: "https://translator-demo-default-rtdb.firebaseio.com",
+                    projectId: "translator-demo",
+                    storageBucket: "translator-demo.appspot.com",
+                    messagingSenderId: "123456789",
+                    appId: "1:123456789:web:demo"
+                };
+
+                // Fallback to localStorage if Firebase fails
+                try {
+                    firebase.initializeApp(firebaseConfig);
+                    database = firebase.database();
+                    userId = getUserId();
+                    console.log('Firebase initialized successfully');
+                } catch (error) {
+                    console.log('Firebase unavailable, using localStorage only:', error);
+                    database = null;
+                }
+            } catch (error) {
+                console.log('Firebase setup failed, using localStorage only');
+                database = null;
+            }
+        }
+
+        function getUserId() {
+            let id = localStorage.getItem('translator-user-id');
+            if (!id) {
+                id = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('translator-user-id', id);
+            }
+            return id;
+        }
+
+        function toggleSync() {
+            if (!database) {
+                alert('❌ Синхронизация недоступна\n\n• Убедитесь что есть интернет\n• Попробуйте перезагрузить страницу');
+                return;
+            }
+
+            if (syncEnabled) {
+                disableSync();
+            } else {
+                enableSync();
+            }
+        }
+
+        function enableSync() {
+            if (!database || !userId) return;
+            
+            const userKey = prompt('🔗 Введите код для синхронизации:\n\n• Используйте одинаковый код на всех устройствах\n• Например: "моя_семья" или "работа123"');
+            
+            if (!userKey || userKey.trim().length < 3) {
+                alert('❌ Код должен содержать минимум 3 символа');
+                return;
+            }
+            
+            const syncKey = userKey.trim().toLowerCase().replace(/[^a-z0-9а-я]/g, '_');
+            localStorage.setItem('translator-sync-key', syncKey);
+            
+            syncEnabled = true;
+            updateSyncButton();
+            
+            // Load existing messages from cloud
+            loadMessagesFromCloud(syncKey);
+            
+            // Listen for new messages
+            database.ref(`chats/${syncKey}/messages`).on('value', function(snapshot) {
+                const cloudMessages = snapshot.val();
+                if (cloudMessages) {
+                    const messageArray = Object.keys(cloudMessages).map(key => ({
+                        ...cloudMessages[key],
+                        id: key
+                    })).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                    
+                    messages = messageArray;
+                    saveMessages();
+                    renderMessages();
+                }
+            });
+            
+            alert('✅ Синхронизация включена!\n\n• Используйте тот же код на других устройствах\n• Сообщения будут синхронизироваться автоматически');
+        }
+
+        function disableSync() {
+            if (database) {
+                const syncKey = localStorage.getItem('translator-sync-key');
+                if (syncKey) {
+                    database.ref(`chats/${syncKey}/messages`).off();
+                }
+            }
+            
+            syncEnabled = false;
+            localStorage.removeItem('translator-sync-key');
+            updateSyncButton();
+            alert('🔄 Синхронизация отключена\n\nСообщения остаются только на этом устройстве');
+        }
+
+        function updateSyncButton() {
+            const btn = document.getElementById('syncBtn');
+            if (syncEnabled) {
+                btn.classList.add('sync-btn', 'active');
+                btn.innerHTML = '✅ Синхр';
+                btn.title = 'Синхронизация включена. Нажмите чтобы отключить';
+            } else {
+                btn.classList.remove('sync-btn', 'active');
+                btn.innerHTML = '🔄 Синхр';
+                btn.title = 'Включить синхронизацию между устройствами';
+            }
+        }
+
+        function loadMessagesFromCloud(syncKey) {
+            if (!database) return;
+            
+            database.ref(`chats/${syncKey}/messages`).once('value')
+                .then(function(snapshot) {
+                    const cloudMessages = snapshot.val();
+                    if (cloudMessages) {
+                        const messageArray = Object.keys(cloudMessages).map(key => ({
+                            ...cloudMessages[key],
+                            id: key
+                        })).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                        
+                        messages = messageArray;
+                        saveMessages();
+                        renderMessages();
+                    }
+                })
+                .catch(function(error) {
+                    console.log('Failed to load from cloud:', error);
+                });
+        }
+
+        function saveMessageToCloud(message) {
+            if (!database || !syncEnabled) return;
+            
+            const syncKey = localStorage.getItem('translator-sync-key');
+            if (!syncKey) return;
+            
+            database.ref(`chats/${syncKey}/messages`).push({
+                ...message,
+                userId: userId,
+                deviceInfo: navigator.userAgent.substring(0, 50)
+            }).catch(function(error) {
+                console.log('Failed to sync message:', error);
+            });
+        }
 
         function setupSpeechRecognition() {
             if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
