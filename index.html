@@ -608,8 +608,8 @@
                 saveMessages();
                 renderMessages();
                 
-                // Save to cloud if sync is enabled
-                saveMessageToCloud(message);
+                // Save to shared storage if sync is enabled
+                saveSharedMessage();
                 
                 document.getElementById('inputText').value = '';
             } catch (error) {
