@@ -331,59 +331,42 @@
             updatePlaceholder();
             updateInfo();
             setupSpeechRecognition();
-            initializeFirebase();
+            checkForSyncCode();
             
             document.getElementById('languageSelect').addEventListener('change', function() {
                 selectedLanguage = this.value;
                 updatePlaceholder();
                 updateInfo();
             });
+            
+            // Listen for storage changes from other tabs/devices
+            window.addEventListener('storage', handleStorageChange);
         });
 
-        function initializeFirebase() {
-            try {
-                // Public Firebase config (можно использовать без секретов)
-                const firebaseConfig = {
-                    apiKey: "AIzaSyBpZV5H0P0_demo_key_for_public_use",
-                    authDomain: "translator-demo.firebaseapp.com",
-                    databaseURL: "https://translator-demo-default-rtdb.firebaseio.com",
-                    projectId: "translator-demo",
-                    storageBucket: "translator-demo.appspot.com",
-                    messagingSenderId: "123456789",
-                    appId: "1:123456789:web:demo"
-                };
-
-                // Fallback to localStorage if Firebase fails
-                try {
-                    firebase.initializeApp(firebaseConfig);
-                    database = firebase.database();
-                    userId = getUserId();
-                    console.log('Firebase initialized successfully');
-                } catch (error) {
-                    console.log('Firebase unavailable, using localStorage only:', error);
-                    database = null;
-                }
-            } catch (error) {
-                console.log('Firebase setup failed, using localStorage only');
-                database = null;
-            }
-        }
-
-        function getUserId() {
-            let id = localStorage.getItem('translator-user-id');
-            if (!id) {
-                id = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                localStorage.setItem('translator-user-id', id);
-            }
-            return id;
-        }
-
-        function toggleSync() {
-            if (!database) {
-                alert('❌ Синхронизация недоступна\n\n• Убедитесь что есть интернет\n• Попробуйте перезагрузить страницу');
+        function checkForSyncCode() {
+            // Check URL hash for sync code
+            const hash = window.location.hash.substr(1);
+            if (hash && hash.length >= 3) {
+                syncCode = hash;
+                enableSyncWithCode(syncCode);
                 return;
             }
 
+            // Check localStorage for existing sync
+            const savedCode = localStorage.getItem('translator-sync-code');
+            if (savedCode) {
+                syncCode = savedCode;
+                enableSyncWithCode(syncCode);
+            }
+        }
+
+        function handleStorageChange(e) {
+            if (syncEnabled && e.key && e.key.startsWith('translator_shared_')) {
+                loadSharedMessages();
+            }
+        }
+
+        function toggleSync() {
             if (syncEnabled) {
                 disableSync();
             } else {
@@ -392,54 +375,53 @@
         }
 
         function enableSync() {
-            if (!database || !userId) return;
+            const userCode = prompt('🔗 Введите код для синхронизации:\n\n• Используйте одинаковый код на всех устройствах\n• Например: "семья123" или "работа"');
             
-            const userKey = prompt('🔗 Введите код для синхронизации:\n\n• Используйте одинаковый код на всех устройствах\n• Например: "моя_семья" или "работа123"');
-            
-            if (!userKey || userKey.trim().length < 3) {
+            if (!userCode || userCode.trim().length < 3) {
                 alert('❌ Код должен содержать минимум 3 символа');
                 return;
             }
             
-            const syncKey = userKey.trim().toLowerCase().replace(/[^a-z0-9а-я]/g, '_');
-            localStorage.setItem('translator-sync-key', syncKey);
-            
+            syncCode = userCode.trim().toLowerCase().replace(/[^a-z0-9а-я]/g, '_');
+            enableSyncWithCode(syncCode);
+        }
+
+        function enableSyncWithCode(code) {
             syncEnabled = true;
+            syncCode = code;
+            
+            localStorage.setItem('translator-sync-code', code);
+            window.location.hash = code;
+            
             updateSyncButton();
+            showSyncInfo();
             
-            // Load existing messages from cloud
-            loadMessagesFromCloud(syncKey);
+            // Load messages from shared storage
+            loadSharedMessages();
             
-            // Listen for new messages
-            database.ref(`chats/${syncKey}/messages`).on('value', function(snapshot) {
-                const cloudMessages = snapshot.val();
-                if (cloudMessages) {
-                    const messageArray = Object.keys(cloudMessages).map(key => ({
-                        ...cloudMessages[key],
-                        id: key
-                    })).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-                    
-                    messages = messageArray;
-                    saveMessages();
-                    renderMessages();
-                }
-            });
+            // Start sync polling for cross-device sync
+            syncInterval = setInterval(loadSharedMessages, 2000);
             
-            alert('✅ Синхронизация включена!\n\n• Используйте тот же код на других устройствах\n• Сообщения будут синхронизироваться автоматически');
+            const shareUrl = window.location.origin + window.location.pathname + '#' + code;
+            alert('✅ Синхронизация включена!\n\n🔗 Поделитесь этой ссылкой:\n' + shareUrl + '\n\n📱 Откройте ту же ссылку на других устройствах для синхронизации');
         }
 
         function disableSync() {
-            if (database) {
-                const syncKey = localStorage.getItem('translator-sync-key');
-                if (syncKey) {
-                    database.ref(`chats/${syncKey}/messages`).off();
-                }
+            syncEnabled = false;
+            syncCode = null;
+            
+            localStorage.removeItem('translator-sync-code');
+            window.location.hash = '';
+            
+            if (syncInterval) {
+                clearInterval(syncInterval);
+                syncInterval = null;
             }
             
-            syncEnabled = false;
-            localStorage.removeItem('translator-sync-key');
             updateSyncButton();
-            alert('🔄 Синхронизация отключена\n\nСообщения остаются только на этом устройстве');
+            hideSyncInfo();
+            
+            alert('🔄 Синхронизация отключена');
         }
 
         function updateSyncButton() {
@@ -455,41 +437,75 @@
             }
         }
 
-        function loadMessagesFromCloud(syncKey) {
-            if (!database) return;
+        function showSyncInfo() {
+            const info = document.createElement('div');
+            info.id = 'syncInfo';
+            info.style.cssText = `
+                background: rgba(16, 185, 129, 0.1);
+                border: 1px solid rgba(16, 185, 129, 0.3);
+                padding: 10px;
+                border-radius: 8px;
+                margin-bottom: 20px;
+                font-size: 14px;
+                text-align: center;
+            `;
+            info.innerHTML = `🔄 Синхронизация активна • Код: <strong>${syncCode}</strong>`;
             
-            database.ref(`chats/${syncKey}/messages`).once('value')
-                .then(function(snapshot) {
-                    const cloudMessages = snapshot.val();
-                    if (cloudMessages) {
-                        const messageArray = Object.keys(cloudMessages).map(key => ({
-                            ...cloudMessages[key],
-                            id: key
-                        })).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-                        
-                        messages = messageArray;
-                        saveMessages();
-                        renderMessages();
-                    }
-                })
-                .catch(function(error) {
-                    console.log('Failed to load from cloud:', error);
-                });
+            const container = document.querySelector('.container');
+            container.insertBefore(info, document.getElementById('messages'));
         }
 
-        function saveMessageToCloud(message) {
-            if (!database || !syncEnabled) return;
+        function hideSyncInfo() {
+            const info = document.getElementById('syncInfo');
+            if (info) {
+                info.remove();
+            }
+        }
+
+        function loadSharedMessages() {
+            if (!syncEnabled || !syncCode) return;
             
-            const syncKey = localStorage.getItem('translator-sync-key');
-            if (!syncKey) return;
+            try {
+                const sharedKey = 'translator_shared_' + syncCode;
+                const sharedData = localStorage.getItem(sharedKey);
+                
+                if (sharedData) {
+                    const parsedData = JSON.parse(sharedData);
+                    if (parsedData.messages && Array.isArray(parsedData.messages)) {
+                        // Only update if there are new messages
+                        if (JSON.stringify(parsedData.messages) !== JSON.stringify(messages)) {
+                            messages = parsedData.messages;
+                            saveMessages();
+                            renderMessages();
+                        }
+                    }
+                }
+            } catch (error) {
+                console.log('Error loading shared messages:', error);
+            }
+        }
+
+        function saveSharedMessage() {
+            if (!syncEnabled || !syncCode) return;
             
-            database.ref(`chats/${syncKey}/messages`).push({
-                ...message,
-                userId: userId,
-                deviceInfo: navigator.userAgent.substring(0, 50)
-            }).catch(function(error) {
-                console.log('Failed to sync message:', error);
-            });
+            try {
+                const sharedKey = 'translator_shared_' + syncCode;
+                const sharedData = {
+                    messages: messages,
+                    lastUpdate: new Date().toISOString(),
+                    device: navigator.userAgent.substring(0, 50)
+                };
+                
+                localStorage.setItem(sharedKey, JSON.stringify(sharedData));
+                
+                // Trigger storage event manually for same-origin tabs
+                window.dispatchEvent(new StorageEvent('storage', {
+                    key: sharedKey,
+                    newValue: JSON.stringify(sharedData)
+                }));
+            } catch (error) {
+                console.log('Error saving shared message:', error);
+            }
         }
 
         function setupSpeechRecognition() {
