@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Тест синхронизации</title>
+    <style>
+        body { font-family: Arial; margin: 20px; background: #f0f0f0; }
+        .test { background: white; padding: 20px; margin: 10px 0; border-radius: 8px; }
+        button { padding: 10px 20px; margin: 5px; }
+        .messages { background: #eee; padding: 10px; min-height: 100px; }
+    </style>
+</head>
+<body>
+    <h1>🔄 Тест синхронизации переводчика</h1>
+    
+    <div class="test">
+        <h3>Шаг 1: Установить код синхронизации</h3>
+        <input type="text" id="syncCode" placeholder="Введите код (например: test123)">
+        <button onclick="setSyncCode()">Установить</button>
+        <button onclick="clearSyncCode()">Очистить</button>
+    </div>
+    
+    <div class="test">
+        <h3>Шаг 2: Добавить сообщение</h3>
+        <input type="text" id="messageText" placeholder="Текст сообщения">
+        <button onclick="addMessage()">Добавить</button>
+    </div>
+    
+    <div class="test">
+        <h3>Шаг 3: Сообщения (должны синхронизироваться)</h3>
+        <div class="messages" id="messages"></div>
+        <button onclick="loadMessages()">Обновить</button>
+    </div>
+    
+    <div class="test">
+        <h3>Инструкция:</h3>
+        <ol>
+            <li>Откройте эту страницу в двух вкладках</li>
+            <li>Установите одинаковый код в обеих вкладках</li>
+            <li>Добавьте сообщение в одной вкладке</li>
+            <li>Нажмите "Обновить" в другой вкладке - сообщение должно появиться</li>
+        </ol>
+    </div>
+
+    <script>
+        let currentSyncCode = null;
+
+        function setSyncCode() {
+            const code = document.getElementById('syncCode').value.trim();
+            if (code.length < 3) {
+                alert('Код должен быть минимум 3 символа');
+                return;
+            }
+            
+            currentSyncCode = code;
+            localStorage.setItem('test-sync-code', code);
+            alert('Код установлен: ' + code);
+            loadMessages();
+        }
+
+        function clearSyncCode() {
+            currentSyncCode = null;
+            localStorage.removeItem('test-sync-code');
+            alert('Код очищен');
+            document.getElementById('messages').innerHTML = '';
+        }
+
+        function addMessage() {
+            if (!currentSyncCode) {
+                alert('Сначала установите код синхронизации');
+                return;
+            }
+            
+            const text = document.getElementById('messageText').value.trim();
+            if (!text) {
+                alert('Введите текст сообщения');
+                return;
+            }
+            
+            const message = {
+                id: Date.now(),
+                text: text,
+                timestamp: new Date().toLocaleTimeString(),
+                device: 'Устройство ' + Math.random().toString(36).substr(2, 3)
+            };
+            
+            // Загружаем существующие сообщения
+            let messages = [];
+            try {
+                const sharedKey = 'translator_shared_' + currentSyncCode;
+                const sharedData = localStorage.getItem(sharedKey);
+                if (sharedData) {
+                    const parsed = JSON.parse(sharedData);
+                    messages = parsed.messages || [];
+                }
+            } catch (e) {}
+            
+            // Добавляем новое сообщение
+            messages.push(message);
+            
+            // Сохраняем
+            const sharedData = {
+                messages: messages,
+                lastUpdate: new Date().toISOString()
+            };
+            
+            const sharedKey = 'translator_shared_' + currentSyncCode;
+            localStorage.setItem(sharedKey, JSON.stringify(sharedData));
+            
+            document.getElementById('messageText').value = '';
+            loadMessages();
+            
+            // Уведомляем другие вкладки
+            window.dispatchEvent(new StorageEvent('storage', {
+                key: sharedKey,
+                newValue: JSON.stringify(sharedData)
+            }));
+        }
+
+        function loadMessages() {
+            if (!currentSyncCode) return;
+            
+            try {
+                const sharedKey = 'translator_shared_' + currentSyncCode;
+                const sharedData = localStorage.getItem(sharedKey);
+                
+                if (sharedData) {
+                    const parsed = JSON.parse(sharedData);
+                    const messages = parsed.messages || [];
+                    
+                    const html = messages.map(msg => 
+                        `<div style="margin: 5px 0; padding: 8px; background: #ddd; border-radius: 4px;">
+                            <strong>${msg.timestamp}</strong> - ${msg.text} <small>(${msg.device})</small>
+                        </div>`
+                    ).join('');
+                    
+                    document.getElementById('messages').innerHTML = html || 'Сообщений нет';
+                } else {
+                    document.getElementById('messages').innerHTML = 'Сообщений нет';
+                }
+            } catch (e) {
+                document.getElementById('messages').innerHTML = 'Ошибка загрузки: ' + e.message;
+            }
+        }
+
+        // Загружаем код при старте
+        window.onload = function() {
+            const savedCode = localStorage.getItem('test-sync-code');
+            if (savedCode) {
+                currentSyncCode = savedCode;
+                document.getElementById('syncCode').value = savedCode;
+                loadMessages();
+            }
+        };
+
+        // Слушаем изменения от других вкладок
+        window.addEventListener('storage', function(e) {
+            if (e.key && e.key.startsWith('translator_shared_')) {
+                loadMessages();
+            }
+        });
+    </script>
+</body>
+</html>
