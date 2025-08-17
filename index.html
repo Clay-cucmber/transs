@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Переводчик Чат - Русский ⇄ 中文</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗣️</text></svg>">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+            color: white;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(0,0,0,0.3);
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .header h1 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            opacity: 0.8;
+            font-size: 14px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        select, button {
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 1px solid #4b5563;
+            background: #374151;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button {
+            background: #2563eb;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        .clear-btn {
+            background: #dc2626 !important;
+        }
+
+        .clear-btn:hover {
+            background: #b91c1c !important;
+        }
+
+        .messages {
+            background: rgba(0,0,0,0.2);
+            border-radius: 15px;
+            padding: 20px;
+            min-height: 400px;
+            margin-bottom: 20px;
+            overflow-y: auto;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding-top: 100px;
+            opacity: 0.6;
+        }
+
+        .empty-state .icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+        }
+
+        .message {
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 4px solid #3b82f6;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .message-header {
+            font-size: 12px;
+            opacity: 0.7;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .message-original {
+            background: rgba(0,0,0,0.2);
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .message-text {
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .input-area {
+            background: rgba(0,0,0,0.3);
+            border-radius: 15px;
+            padding: 20px;
+        }
+
+        .input-controls {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+
+        textarea {
+            flex: 1;
+            min-width: 250px;
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid #4b5563;
+            background: #374151;
+            color: white;
+            resize: none;
+            min-height: 50px;
+            font-size: 16px;
+            font-family: Arial, sans-serif;
+        }
+
+        textarea::placeholder {
+            color: #9ca3af;
+        }
+
+        .voice-btn {
+            background: #16a34a;
+            padding: 12px 16px;
+            font-size: 16px;
+            min-width: 50px;
+        }
+
+        .voice-btn.recording {
+            background: #dc2626;
+            animation: pulse 1s infinite;
+        }
+
+        .send-btn {
+            padding: 12px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            min-width: 100px;
+        }
+
+        .send-btn:disabled {
+            background: #6b7280 !important;
+            cursor: not-allowed;
+        }
+
+        .info {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 12px;
+            opacity: 0.6;
+        }
+
+        .loading {
+            display: flex;
+            justify-content: center;
+            margin: 10px 0;
+        }
+
+        .loading div {
+            background: #374151;
+            padding: 10px 20px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #4b5563;
+            border-top: 2px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .input-controls {
+                flex-direction: column;
+            }
+
+            textarea {
+                min-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div>
+                <h1>🗣️ Переводчик Чат</h1>
+                <p>Русский ⇄ 中文</p>
+            </div>
+            
+            <div class="controls">
+                <select id="languageSelect">
+                    <option value="ru">Русский → 中文</option>
+                    <option value="zh">中文 → Русский</option>
+                </select>
+                
+                <button class="clear-btn" onclick="clearChat()">Очистить</button>
+            </div>
+        </div>
+        
+        <!-- Messages -->
+        <div class="messages" id="messages">
+            <div class="empty-state">
+                <div class="icon">🌍</div>
+                <h3>Добро пожаловать в переводчик!</h3>
+                <p>Начните печатать или используйте голосовой ввод</p>
+            </div>
+        </div>
+        
+        <!-- Input Area -->
+        <div class="input-area">
+            <div class="input-controls">
+                <textarea 
+                    id="inputText" 
+                    placeholder="Напишите на русском..." 
+                    rows="2"
+                    onkeypress="handleKeyPress(event)">
+                </textarea>
+                
+                <button class="voice-btn" id="voiceBtn" onclick="toggleRecording()">
+                    🎤
+                </button>
+                
+                <button class="send-btn" onclick="sendMessage()">
+                    Отправить
+                </button>
+            </div>
+            
+            <div class="info" id="info">
+                🌐 Переводим с русского на китайский
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let messages = [];
+        let selectedLanguage = 'ru';
+        let isRecording = false;
+        let isLoading = false;
+        let recognition = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadMessages();
+            updatePlaceholder();
+            updateInfo();
+            setupSpeechRecognition();
+            
+            document.getElementById('languageSelect').addEventListener('change', function() {
+                selectedLanguage = this.value;
+                updatePlaceholder();
+                updateInfo();
+            });
+        });
+
+        function setupSpeechRecognition() {
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                recognition = new SpeechRecognition();
+                recognition.continuous = false;
+                recognition.interimResults = false;
+                
+                recognition.onstart = () => {
+                    isRecording = true;
+                    updateVoiceButton();
+                };
+                
+                recognition.onend = () => {
+                    isRecording = false;
+                    updateVoiceButton();
+                };
+                
+                recognition.onresult = (event) => {
+                    const transcript = event.results[0][0].transcript;
+                    document.getElementById('inputText').value = transcript;
+                    setTimeout(() => sendMessage(), 500);
+                };
+                
+                recognition.onerror = (event) => {
+                    console.error('Speech recognition error:', event.error);
+                    isRecording = false;
+                    updateVoiceButton();
+                };
+            } else {
+                document.getElementById('voiceBtn').style.display = 'none';
+            }
+        }
+
+        function toggleRecording() {
+            if (!recognition) {
+                alert('Голосовой ввод не поддерживается в вашем браузере');
+                return;
+            }
+            
+            if (isRecording) {
+                recognition.stop();
+            } else {
+                recognition.lang = selectedLanguage === 'ru' ? 'ru-RU' : 'zh-CN';
+                recognition.start();
+            }
+        }
+
+        function updateVoiceButton() {
+            const btn = document.getElementById('voiceBtn');
+            if (isRecording) {
+                btn.innerHTML = '⏹️';
+                btn.classList.add('recording');
+            } else {
+                btn.innerHTML = '🎤';
+                btn.classList.remove('recording');
+            }
+        }
+
+        function updatePlaceholder() {
+            const textarea = document.getElementById('inputText');
+            textarea.placeholder = selectedLanguage === 'ru' ? 'Напишите на русском...' : '用中文写...';
+        }
+
+        function updateInfo() {
+            const info = document.getElementById('info');
+            info.textContent = selectedLanguage === 'ru' 
+                ? '🌐 Переводим с русского на китайский'
+                : '🌐 Переводим с китайского на русский';
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        async function sendMessage() {
+            const inputText = document.getElementById('inputText').value.trim();
+            if (!inputText || isLoading) return;
+            
+            isLoading = true;
+            showLoading();
+            
+            try {
+                const targetLanguage = selectedLanguage === 'ru' ? 'zh' : 'ru';
+                const translatedText = await translateText(inputText, selectedLanguage, targetLanguage);
+                
+                const message = {
+                    id: Date.now().toString(),
+                    text: translatedText,
+                    original_text: inputText,
+                    language: targetLanguage,
+                    timestamp: new Date().toISOString(),
+                };
+                
+                messages.push(message);
+                saveMessages();
+                renderMessages();
+                document.getElementById('inputText').value = '';
+            } catch (error) {
+                console.error('Translation error:', error);
+                alert('Ошибка перевода');
+            } finally {
+                isLoading = false;
+                hideLoading();
+            }
+        }
+
+        async function translateText(text, fromLang, toLang) {
+            try {
+                // Try MyMemory API
+                const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${fromLang}|${toLang}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.responseData && data.responseData.translatedText) {
+                        return data.responseData.translatedText;
+                    }
+                }
+            } catch (error) {
+                console.log('API translation failed, using fallback:', error);
+            }
+
+            // Fallback translations
+            const translations = {
+                'ru-zh': {
+                    'привет': '你好',
+                    'спасибо': '谢谢',
+                    'до свидания': '再见',
+                    'как дела': '你好吗',
+                    'хорошо': '好的',
+                    'плохо': '不好',
+                    'да': '是',
+                    'нет': '不',
+                    'пожалуйста': '请',
+                    'извините': '对不起',
+                    'я люблю тебя': '我爱你',
+                    'сколько это стоит': '这要多少钱',
+                    'где туалет': '厕所在哪里',
+                    'помогите': '帮帮我',
+                    'я не понимаю': '我不明白'
+                },
+                'zh-ru': {
+                    '你好': 'привет',
+                    '谢谢': 'спасибо',
+                    '再见': 'до свидания',
+                    '你好吗': 'как дела',
+                    '好的': 'хорошо',
+                    '不好': 'плохо',
+                    '是': 'да',
+                    '不': 'нет',
+                    '请': 'пожалуйста',
+                    '对不起': 'извините',
+                    '我爱你': 'я люблю тебя',
+                    '这要多少钱': 'сколько это стоит',
+                    '厕所在哪里': 'где туалет',
+                    '帮帮我': 'помогите',
+                    '我不明白': 'я не понимаю'
+                }
+            };
+            
+            const key = `${fromLang}-${toLang}`;
+            const translationMap = translations[key] || {};
+            
+            const words = text.toLowerCase().split(' ');
+            const translatedWords = words.map(word => 
+                translationMap[word] || `[${word}]`
+            );
+            
+            return translatedWords.join(' ');
+        }
+
+        function showLoading() {
+            const loading = document.createElement('div');
+            loading.className = 'loading';
+            loading.id = 'loading';
+            loading.innerHTML = `
+                <div>
+                    <div class="spinner"></div>
+                    <span>Перевожу...</span>
+                </div>
+            `;
+            document.getElementById('messages').appendChild(loading);
+            scrollToBottom();
+        }
+
+        function hideLoading() {
+            const loading = document.getElementById('loading');
+            if (loading) {
+                loading.remove();
+            }
+        }
+
+        function renderMessages() {
+            const messagesContainer = document.getElementById('messages');
+            
+            if (messages.length === 0) {
+                messagesContainer.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">🌍</div>
+                        <h3>Добро пожаловать в переводчик!</h3>
+                        <p>Начните печатать или используйте голосовой ввод</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            messagesContainer.innerHTML = messages.map(message => `
+                <div class="message">
+                    <div class="message-header">
+                        <span>
+                            ${message.language === 'ru' ? '🇷🇺 Русский' : '🇨🇳 中文'}
+                        </span>
+                        <span>
+                            ${new Date(message.timestamp).toLocaleTimeString()}
+                        </span>
+                    </div>
+                    
+                    ${message.original_text ? `
+                        <div class="message-original">
+                            <strong>Оригинал:</strong> ${message.original_text}
+                        </div>
+                    ` : ''}
+                    
+                    <div class="message-text">
+                        ${message.text}
+                    </div>
+                </div>
+            `).join('');
+            
+            scrollToBottom();
+        }
+
+        function scrollToBottom() {
+            const messages = document.getElementById('messages');
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        function clearChat() {
+            messages = [];
+            saveMessages();
+            renderMessages();
+        }
+
+        function loadMessages() {
+            const saved = localStorage.getItem('translator-messages');
+            if (saved) {
+                messages = JSON.parse(saved);
+                renderMessages();
+            }
+        }
+
+        function saveMessages() {
+            localStorage.setItem('translator-messages', JSON.stringify(messages));
+        }
+    </script>
+</body>
+</html>
