@@ -740,6 +740,17 @@
         }
 
         function clearChat() {
+            if (syncEnabled) {
+                const confirm = window.confirm('🗑️ Очистить чат?\n\n⚠️ Синхронизация включена!\nЭто удалит сообщения на ВСЕХ устройствах.');
+                if (!confirm) return;
+                
+                // Clear cloud data
+                const syncKey = localStorage.getItem('translator-sync-key');
+                if (database && syncKey) {
+                    database.ref(`chats/${syncKey}/messages`).remove();
+                }
+            }
+            
             messages = [];
             saveMessages();
             renderMessages();
