@@ -751,6 +751,28 @@
                 messages = JSON.parse(saved);
                 renderMessages();
             }
+            
+            // Check if sync was enabled before
+            const syncKey = localStorage.getItem('translator-sync-key');
+            if (syncKey && database) {
+                syncEnabled = true;
+                updateSyncButton();
+                
+                // Reconnect to cloud sync
+                database.ref(`chats/${syncKey}/messages`).on('value', function(snapshot) {
+                    const cloudMessages = snapshot.val();
+                    if (cloudMessages) {
+                        const messageArray = Object.keys(cloudMessages).map(key => ({
+                            ...cloudMessages[key],
+                            id: key
+                        })).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                        
+                        messages = messageArray;
+                        saveMessages();
+                        renderMessages();
+                    }
+                });
+            }
         }
 
         function saveMessages() {
