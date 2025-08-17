@@ -585,7 +585,7 @@
                 const translatedText = await translateText(inputText, selectedLanguage, targetLanguage);
                 
                 const message = {
-                    id: Date.now().toString(),
+                    id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 5),
                     text: translatedText,
                     original_text: inputText,
                     language: targetLanguage,
@@ -595,6 +595,10 @@
                 messages.push(message);
                 saveMessages();
                 renderMessages();
+                
+                // Save to cloud if sync is enabled
+                saveMessageToCloud(message);
+                
                 document.getElementById('inputText').value = '';
             } catch (error) {
                 console.error('Translation error:', error);
